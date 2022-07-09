@@ -50,8 +50,7 @@ extern I2C_HandleTypeDef hi2c1;
 extern DMA_HandleTypeDef hdma_i2c1_rx;
 extern UART_HandleTypeDef huart2;
 
-uint8_t cam_frames[FRAME_ROWS * FRAME_COLS * BYTES_IN_HALFWORD];
-uint8_t gotData = 0;
+extern MLX_CalibrationData caliData;
 /* USER CODE END Variables */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,68 +63,102 @@ uint8_t gotData = 0;
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-	if (hi2c == &hi2c1)
-	{
-		printf("data\r\n");
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		gotData = 1;
-	}
+				if (hi2c == &hi2c1)
+				{
+								printf("data\r\n");
+								HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+				}
 }
 
 static uint16_t swap_uint16(uint16_t val)
 {
-    return (val << 8) | (val >> 8 );
+				return (val << 8) | (val >> 8 );
 }
 
 void StartDefaultTask(void *argument)
 {
-	HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(&hi2c1, mlx90640Address << 1, 100, osWaitForever);
-	printf ("Device Ready status: %d\r\n", status);
+				uint8_t refreshRate[2] = {0};
 
-	uint8_t refreshRate[2] = {0};
-	HAL_I2C_Mem_Read(&hi2c1, mlx90640Address << 1, 0x800D, I2C_MEMADD_SIZE_16BIT, refreshRate, 2, 3000);
-	//HAL_I2C_Master_Receive_DMA(&hi2c1, DEVICE_ADDR << 1, cam_frames, FRAME_ROWS * FRAME_COLS * 2);
-	//status = HAL_I2C_Mem_Read_DMA(&hi2c1, mlx90640Address << 1, 0x2440, I2C_MEMADD_SIZE_16BIT, cam_frames, NUM_OF_PIXELS);
-	//printf ("Master Receive status: %d\r\n", status);
+				// Wait 80ms + delay determined by the refresh rate
+				osDelay(80 + 1000); // Given that refresh rate is set 2Hz
 
-	printf ("Refresh rate from 0x800D: 0x%X\r\n", swap_uint16(*(uint16_t*)refreshRate));
+				// Extract calibration data from EEPROM and store in RAM
+				extractCalibrationData();
 
-	setRefreshRate(MLX_16_HZ);
 
-	osDelay(100);
+				//HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(&hi2c1, mlx90640Address << 1, 100, osWaitForever);
+				//printf ("Device Ready status: %d\r\n", status);
+				//status = HAL_I2C_Mem_Read_DMA(&hi2c1, mlx90640Address << 1, 0x2440, I2C_MEMADD_SIZE_16BIT, cam_frames, NUM_OF_PIXELS);
+				//printf ("Master Receive status: %d\r\n", status);
 
-	HAL_I2C_Mem_Read(&hi2c1, mlx90640Address << 1, 0x800D, I2C_MEMADD_SIZE_16BIT, refreshRate, 2, 3000);
-	printf ("Refresh rate from 0x800D: 0x%X\r\n", swap_uint16(*(uint16_t*)refreshRate));
+				// TODO: Move EEPROM extractions to separate functions and then brake down the calcu
+				printf("kvdd: %d\r\n", caliData.eepromData.kVdd);
+				printf("vdd25: %d\r\n\n", caliData.eepromData.Vdd25);
 
-	int i = 0;
-	for (;;)
-	{
-		printf ("test\r\n");
-		if (gotData == 1)
-		{
-			int16_t *ptr = (int16_t*)cam_frames;
-			for (i = 0; i < FRAME_ROWS * FRAME_COLS; i++)
-			{
-				if ((i + 1) % FRAME_COLS == 0)
+				printf("Kvptat: %.5f\r\n", caliData.eepromData.KvPtat);
+				printf("Ktptat: %.5f\r\n", caliData.eepromData.KtPtat);
+				printf("deltaV: %.5f\r\n", caliData.taSensorParams.deltaV);
+				printf("Vdd: %.5f\r\n", caliData.taSensorParams.Vdd);
+				printf("Vptat25: %d\r\n", caliData.eepromData.Vptat25);
+				printf("Vptat: %d\r\n", caliData.taSensorParams.Vptat);
+				printf("Vbe: %d\r\n", caliData.taSensorParams.Vbe);
+				printf("AlphaptatEe: %d\r\n", caliData.eepromData.AlphaPtatEe);
+				printf("Alphaptat: %d\r\n", caliData.eepromData.AlphaPtat);
+				printf("Vptatart: %.5f\r\n", caliData.taSensorParams.Vptatart);
+				printf("Ta: %.5f\r\n\n", caliData.taSensorParams.Ta);
+
+				printf("offsetAvg: %d\r\n\n", caliData.eepromData.offsetAvg);
+				uint8_t i = 0;
+				for (i = 0; i < 6; i++)
+								printf ("offsetRows[%d]: 0x%X\r\n", i, caliData.eepromData.offsetRows[i]);
+
+				printf ("occRows: ");
+				for (i = 0; i < 24; i++)
+								printf ("[%d: %d] ", i + 1, caliData.eepromData.occRows[i]);
+				printf ("\r\n");
+				printf("occScaleRow: %d\r\n", caliData.eepromData.occScaleRow);
+
+				for (i = 0; i < 8; i++)
+								printf("offsetCols[%d]: 0x%X\r\n", i, caliData.eepromData.offsetCols[i]);
+
+				printf("occCols: ");
+				for (i = 0; i < 32; i++)
+								printf("[%d: %d] ", i + 1, caliData.eepromData.occCols[i]);
+				printf("\r\n");
+
+				printf("occScaleCol: %d\r\n", caliData.eepromData.occScaleCol);
+				printf("occScaleRemnant: %d\r\n", caliData.eepromData.occScaleRemnant);
+
+				printf ("pix(12,16) offset: %d\r\n", getPixelOffset(12, 16));
+
+				printf("\r\n");
+				printf("gain: %d\r\n", caliData.eepromData.gain);
+				printf("Kgain: %.5f\r\n", caliData.kGain);
+
+				printf("ResolutionEE: %d\r\n", caliData.eepromData.resolutionEe);
+				printf("ResolutionReg: %d\r\n", caliData.resolutionsparams.resolutionReg);
+				printf("ResolutionCorr: %.2f\r\n\n", caliData.resolutionsparams.resolutionCorr);
+
+//				setRefreshRate(MLX_16_HZ);
+//				HAL_I2C_Mem_Read(&hi2c1, mlx90640Address << 1, 0x800D, I2C_MEMADD_SIZE_16BIT, refreshRate, 2, 3000);
+//				printf ("Refresh rate from 0x800D: 0x%X\r\n", swap_uint16(*(uint16_t*)refreshRate));
+
+				// Get raw IR data
+				// Gain compensation
+
+				for (;;)
 				{
-					printf ("\r\n");
+								printf ("test\r\n");
+								osDelay(10000);
 				}
-
-				printf ("%d ", ptr[i]);
-
-			}
-			gotData = 0;
-		}
-		osDelay(10000);
-	}
 }
 
 void StartCameraTask(void *argument)
 {
-	for (;;)
-	{
-		osDelay(10000);
-	}
+				for (;;)
+				{
+								osDelay(10000);
+				}
 }
 
 /* USER CODE END Application */
