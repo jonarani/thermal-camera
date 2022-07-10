@@ -108,7 +108,7 @@ void StartDefaultTask(void *argument)
 				printf("Ta: %.5f\r\n\n", caliData.taSensorParams.Ta);
 
 				printf("offsetAvg: %d\r\n\n", caliData.eepromData.offsetAvg);
-				uint8_t i = 0;
+				uint16_t i = 0;
 				for (i = 0; i < 6; i++)
 								printf ("offsetRows[%d]: 0x%X\r\n", i, caliData.eepromData.offsetRows[i]);
 
@@ -130,10 +130,77 @@ void StartDefaultTask(void *argument)
 				printf("occScaleRemnant: %d\r\n", caliData.eepromData.occScaleRemnant);
 
 				printf ("pix(12,16) offset: %d\r\n", getPixelOffset(12, 16));
+				printf("\r\n");
+
+				printf("alphaRefernce: 0x%X or %d\r\n", caliData.eepromData.alphaRef, caliData.eepromData.alphaRef);
+				printf("alphaScale: %d\r\n", caliData.eepromData.alphaScale);
+
+				for (i = 0; i < 6; i++)
+								printf("accRowRegisters[%d]: 0x%X\r\n", i, caliData.eepromData.accRowRegisters[i]);
+
+				printf("accRows: ");
+				for (i = 0; i < 24; i++)
+								printf("[%d: %d] ", i + 1, caliData.eepromData.accRows[i]);
+
+				printf("\r\n");
+
+				for (i = 0; i < 8; i++)
+								printf("accColRegisters[%d]: 0x%X\r\n", i, caliData.eepromData.accColRegisters[i]);
+
+				printf("accCols: ");
+				for (i = 0; i < 32; i++)
+								printf("[%d: %d] ", i + 1, caliData.eepromData.accCols[i]);
+
+				printf("\r\n");
+
+				printf("accScaleRow: %d\r\n", caliData.eepromData.accScaleRow);
+				printf("accScaleCol: %d\r\n", caliData.eepromData.accScaleCol);
+				printf("accScaleRemnant: %d\r\n", caliData.eepromData.accScaleRemnant);
+
+				printf ("alphaPixel(12,16): %d\r\n", getAlphaPixel(12, 16));
+
+				printf("\r\n");
+
+				printf("KTaEe(12,16): %d\r\n", getKTaEe(12,16));
+				printf("KTaRcEe(12,16): %d\r\n", getKTaRcEe(12,16));
+				printf("KTaScale1: %d\r\n", caliData.eepromData.kTaScale1);
+				printf("KTaScale2: %d\r\n", caliData.eepromData.kTaScale2);
+
+				printf ("\r\n");
+
+				printf("step: %d\r\n", caliData.eepromData.step);
+				printf("ct3: %d\r\n", caliData.eepromData.ct3);
+				printf("ct4: %d\r\n", caliData.eepromData.ct4);
 
 				printf("\r\n");
 				printf("gain: %d\r\n", caliData.eepromData.gain);
 				printf("Kgain: %.5f\r\n", caliData.kGain);
+
+
+				printf ("\r\n");
+
+				printf ("ksToScale: %d\r\n", caliData.eepromData.ksToScale);
+				printf ("ksTo1Ee: %d\r\n", caliData.eepromData.ksTo1Ee);
+				printf ("ksTo1: %.5f\r\n", caliData.eepromData.ksTo1);
+				printf ("ksTo2Ee %d\r\n", caliData.eepromData.ksTo2Ee);
+				printf ("ksTo2: %.5f\r\n", caliData.eepromData.ksTo2);
+				printf ("ksTo3Ee %d\r\n", caliData.eepromData.ksTo3Ee);
+				printf ("ksTo3: %.5f\r\n", caliData.eepromData.ksTo3);
+				printf ("ksTo4Ee %d\r\n", caliData.eepromData.ksTo4Ee);
+				printf ("ksTo4: %.5f\r\n", caliData.eepromData.ksTo4);
+
+				printf ("\r\n");
+
+				printf("alphaCorrRange1: %.5f\r\n", caliData.eepromData.alphaCorrRange1);
+				printf("alphaCorrRange2: %.5f\r\n", caliData.eepromData.alphaCorrRange2);
+				printf("alphaCorrRange3: %.5f\r\n", caliData.eepromData.alphaCorrRange3);
+				printf("alphaCorrRange4: %.5f\r\n", caliData.eepromData.alphaCorrRange4);
+
+				printf ("\r\n");
+
+				printf("alpha(12,16): %.10f\r\n", getAlphaij(12, 16));
+
+				printf("\r\n");
 
 				printf("ResolutionEE: %d\r\n", caliData.eepromData.resolutionEe);
 				printf("ResolutionReg: %d\r\n", caliData.resolutionsparams.resolutionReg);
@@ -146,9 +213,10 @@ void StartDefaultTask(void *argument)
 				// Get raw IR data
 				// Gain compensation
 
+				printf ("Starting for loop.\r\n");
 				for (;;)
 				{
-								printf ("test\r\n");
+								//printf ("test\r\n");
 								osDelay(10000);
 				}
 }

@@ -38,6 +38,81 @@ int16_t getPixelOffset(uint8_t pixelRow, uint8_t pixelCol)
 				return pixelOffset;
 }
 
+// Row 1 - 24, Col 1 - 32
+int16_t getAlphaPixel(uint8_t pixelRow, uint8_t pixelCol)
+{
+				int16_t alphaPixel =
+												(caliData.eepromData.pixelOffsets[(pixelRow - 1) * 32 + (pixelCol - 1)]
+												& 0x03F0)
+												>> 4;
+
+				if (alphaPixel > 31)
+								alphaPixel -= 64;
+
+				return alphaPixel;
+}
+
+// Row 1 - 24, Col 1 - 32
+int8_t getKTaEe(uint8_t pixelRow, uint8_t pixelCol)
+{
+				int8_t kTaEe =
+												(caliData.eepromData.pixelOffsets[(pixelRow - 1) * 32 + (pixelCol - 1)]
+												& 0x000E)
+												>> 1;
+
+				if (kTaEe > 3)
+								kTaEe -= 8;
+
+				return kTaEe;
+}
+
+// Row 1 - 24, Col 1 - 32
+uint16_t getKTaRcEe(uint8_t pixelRow, uint8_t pixelCol)
+{
+				uint16_t kTaRcEe = 0;
+
+				if (pixelRow % 2 != 0 && pixelCol % 2 != 0)
+				{
+								kTaRcEe = (caliData.eepromData.kTaAvg[0] & 0xFF00) >> 8;
+				}
+				else if (pixelRow % 2 == 0 && pixelCol % 2 != 0)
+				{
+								kTaRcEe = caliData.eepromData.kTaAvg[0] & 0x00FF;
+				}
+				else if (pixelRow % 2 != 0 && pixelCol % 2 == 0)
+				{
+								kTaRcEe = (caliData.eepromData.kTaAvg[1] & 0xFF00) >> 8;
+				}
+				else if (pixelRow % 2 == 0 && pixelCol % 2 == 0)
+				{
+								kTaRcEe = caliData.eepromData.kTaAvg[1] & 0x00FF;
+				}
+
+				if (kTaRcEe > 127)
+								kTaRcEe -= 256;
+
+				return kTaRcEe;
+}
+
+double getAlphaij(uint8_t pixelRow, uint8_t pixelCol)
+{
+				double alphaij = 0;
+				double dividend =
+												caliData.eepromData.alphaRef +
+												caliData.eepromData.accRows[pixelRow - 1] *
+												pow(2, caliData.eepromData.accScaleRow) +
+												caliData.eepromData.accCols[pixelCol - 1] *
+												pow(2, caliData.eepromData.accScaleCol) +
+												getAlphaPixel(pixelRow, pixelCol) *
+												pow(2, caliData.eepromData.accScaleRemnant);
+
+
+				double divisor = pow(2, caliData.eepromData.alphaScale);
+
+				alphaij = dividend / divisor;
+				return alphaij;
+}
+
 static MLX90640_StatusTypedef restoreVddSensorParams()
 {
 				HAL_StatusTypeDef status = HAL_OK;
@@ -149,8 +224,6 @@ static MLX90640_StatusTypedef restoreOffsets()
 				for (i = 0; i < 6; i++)
 								caliData.eepromData.offsetRows[i] = (offsetRows[i*2] << 8) | offsetRows[i*2 + 1];
 
-				printf ("OccRow12: %d\r\n", (caliData.eepromData.offsetRows[2] & 0xF000) >> 12);
-
 				for (i = 0; i < NUM_ROWS_IN_FRAME; i++)
 				{
 								uint8_t maskShift = (i % 4) * 4;
@@ -239,6 +312,163 @@ static MLX90640_StatusTypedef restoreOffsets()
 				return MLX_OK;
 }
 
+static MLX90640_StatusTypedef restoreSensitivityAlphaij()
+{
+				uint16_t i = 0;
+				HAL_StatusTypeDef status = HAL_OK;
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																																		mlx90640Address << 1,
+																																		MLX90640_ALPHA_REF_ADDR,
+																																		I2C_MEMADD_SIZE_16BIT,
+																																		(uint8_t*)&caliData.eepromData.alphaRef,
+																																		sizeof(caliData.eepromData.alphaRef),
+																																		TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreSensitivity HAL NOT OK!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				caliData.eepromData.alphaRef = swap_uint16(caliData.eepromData.alphaRef);
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																																		mlx90640Address << 1,
+																																		MLX90640_SCALE_ACC_ADDR,
+																																		I2C_MEMADD_SIZE_16BIT,
+																																		(uint8_t*)&caliData.eepromData.scaleACCReg,
+																																		sizeof(caliData.eepromData.scaleACCReg),
+																																		TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreSensitivity HAL NOT OK2!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				caliData.eepromData.scaleACCReg = swap_uint16(caliData.eepromData.scaleACCReg);
+				caliData.eepromData.alphaScale = ((caliData.eepromData.scaleACCReg & 0xF000) >> 12) + 30;
+
+
+				// restore acc rows
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_ACC_ROW_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&caliData.eepromData.accRowRegisters,
+																														sizeof(caliData.eepromData.accRowRegisters),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreSensitivity HAL NOT OK3!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				for (i = 0; i < 6; i++)
+								caliData.eepromData.accRowRegisters[i] =
+																swap_uint16(caliData.eepromData.accRowRegisters[i]);
+
+				for (i = 0; i < NUM_ROWS_IN_FRAME; i++)
+				{
+								uint8_t maskShift = (i % 4) * 4;
+								uint16_t mask = 0x000F << maskShift;
+								uint8_t accRowsElement = (double)i / 4.;
+
+								caliData.eepromData.accRows[i] =
+																(caliData.eepromData.accRowRegisters[accRowsElement] & mask) >> maskShift;
+
+								if (caliData.eepromData.accRows[i] > 7)
+												caliData.eepromData.accRows[i] -= 16;
+				}
+
+				caliData.eepromData.accScaleRow = (caliData.eepromData.scaleACCReg & 0x0F00) >> 8;
+
+
+				// restore acc cols
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																																	mlx90640Address << 1,
+																																	MLX90640_ACC_COL_ADDR,
+																																	I2C_MEMADD_SIZE_16BIT,
+																																	(uint8_t*)&caliData.eepromData.accColRegisters,
+																																	sizeof(caliData.eepromData.accColRegisters),
+																																	TIMEOUT_MS);
+
+			if (status != HAL_OK)
+			{
+							printf("restoreSensitivity HAL NOT OK4!\r\n");
+							return MLX_HAL_ERROR;
+			}
+
+			for (i = 0; i < 8; i++)
+							caliData.eepromData.accColRegisters[i] =
+															swap_uint16(caliData.eepromData.accColRegisters[i]);
+
+			for (i = 0; i < NUM_COLS_IN_FRAME; i++)
+			{
+							uint8_t maskShift = (i % 4) * 4;
+							uint16_t mask = 0x000F << maskShift;
+							uint8_t accColsElement = (double)i / 4.;
+
+							caliData.eepromData.accCols[i] =
+															(caliData.eepromData.accColRegisters[accColsElement] & mask) >> maskShift;
+
+							if (caliData.eepromData.accCols[i] > 7)
+											caliData.eepromData.accCols[i] -= 16;
+			}
+
+			caliData.eepromData.accScaleCol = (caliData.eepromData.scaleACCReg & 0x00F0) >> 4;
+
+			caliData.eepromData.accScaleRemnant = caliData.eepromData.scaleACCReg & 0x000F;
+
+				return MLX_OK;
+}
+
+static MLX90640_StatusTypedef restoreKtaCoefficient()
+{
+				uint16_t kTaScaleReg = 0;
+				HAL_StatusTypeDef status = HAL_OK;
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																																		mlx90640Address << 1,
+																																		MLX90640_KTA_AVG_ADDR,
+																																		I2C_MEMADD_SIZE_16BIT,
+																																		(uint8_t*)&caliData.eepromData.kTaAvg,
+																																		sizeof(caliData.eepromData.kTaAvg),
+																																		TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreKtaCoefficient HAL NOT OK!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				caliData.eepromData.kTaAvg[0] = swap_uint16(caliData.eepromData.kTaAvg[0]);
+				caliData.eepromData.kTaAvg[1] = swap_uint16(caliData.eepromData.kTaAvg[1]);
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_RES_CTRL_AND_SCALE_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&kTaScaleReg,
+																														sizeof(kTaScaleReg),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreKtaCoefficient HAL NOT OK2!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				kTaScaleReg = swap_uint16(kTaScaleReg);
+
+				caliData.eepromData.kTaScale1 = ((kTaScaleReg & 0x00F0) >> 4) + 8;
+				caliData.eepromData.kTaScale2 = kTaScaleReg & 0x000F;
+
+				return MLX_OK;
+}
+
 static MLX90640_StatusTypedef restoreGain()
 {
 				HAL_StatusTypeDef status = HAL_OK;
@@ -254,12 +484,161 @@ static MLX90640_StatusTypedef restoreGain()
 
 				if (status != HAL_OK)
 				{
-								printf("restoreGain HAL NOT OK 2!\r\n");
+								printf("restoreGain HAL NOT OK!\r\n");
 								return MLX_HAL_ERROR;
 				}
 
 				gainRegister = swap_uint16(gainRegister);
 				caliData.eepromData.gain = gainRegister;
+
+				return MLX_OK;
+}
+
+static MLX90640_StatusTypedef restoreCornerTemperatures()
+{
+				HAL_StatusTypeDef status = HAL_OK;
+				uint16_t cornerTempReg = 0;
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_CORNER_TEMP_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&cornerTempReg,
+																														sizeof(cornerTempReg),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreCornerTemperatures HAL NOT OK!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				cornerTempReg = swap_uint16(cornerTempReg);
+
+				caliData.eepromData.ct1 = -40;
+				caliData.eepromData.ct2 = 0;
+				caliData.eepromData.step = ((cornerTempReg & 0x3000) >> 12) * 10;
+				caliData.eepromData.ct3 = ((cornerTempReg & 0x00F0) >> 4) * caliData.eepromData.step;
+				caliData.eepromData.ct4 = ((cornerTempReg & 0x0F00) >> 8) *
+												caliData.eepromData.step + caliData.eepromData.ct3;
+
+				return MLX_OK;
+}
+
+static MLX90640_StatusTypedef restoreKsToCoefficient()
+{
+				HAL_StatusTypeDef status = HAL_OK;
+				uint16_t ksToScaleReg = 0;
+				uint16_t ksToReg = 0;
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_CORNER_TEMP_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&ksToScaleReg,
+																														sizeof(ksToScaleReg),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreCornerTemperatures HAL NOT OK!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				ksToScaleReg = swap_uint16(ksToScaleReg);
+
+				caliData.eepromData.ksToScale = (ksToScaleReg & 0x000F) + 8;
+
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_KS_TO_1_2_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&ksToReg,
+																														sizeof(ksToReg),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreCornerTemperatures HAL NOT OK2!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				ksToReg = swap_uint16(ksToReg);
+
+				caliData.eepromData.ksTo1Ee = ksToReg & 0x00FF;
+				if (caliData.eepromData.ksTo1Ee > 127)
+								caliData.eepromData.ksTo1Ee -= 256;
+
+				caliData.eepromData.ksTo1 = (double)caliData.eepromData.ksTo1Ee
+												/ pow(2, caliData.eepromData.ksToScale);
+
+
+				caliData.eepromData.ksTo2Ee = (ksToReg & 0xFF00) >> 8;
+				if (caliData.eepromData.ksTo2Ee > 127)
+								caliData.eepromData.ksTo2Ee -= 256;
+
+				caliData.eepromData.ksTo2 = (double)caliData.eepromData.ksTo2Ee
+												/ pow(2, caliData.eepromData.ksToScale);
+
+
+
+				status = HAL_I2C_Mem_Read(&hi2c1,
+																														mlx90640Address << 1,
+																														MLX90640_KS_TO_3_4_ADDR,
+																														I2C_MEMADD_SIZE_16BIT,
+																														(uint8_t*)&ksToReg,
+																														sizeof(ksToReg),
+																														TIMEOUT_MS);
+
+				if (status != HAL_OK)
+				{
+								printf("restoreCornerTemperatures HAL NOT OK3!\r\n");
+								return MLX_HAL_ERROR;
+				}
+
+				ksToReg = swap_uint16(ksToReg);
+
+				caliData.eepromData.ksTo3Ee = (ksToReg & 0x00FF);
+				if (caliData.eepromData.ksTo3Ee > 127)
+								caliData.eepromData.ksTo3Ee -= 256;
+
+				caliData.eepromData.ksTo3 = caliData.eepromData.ksTo3Ee
+												/ pow(2, caliData.eepromData.ksToScale);
+
+
+				caliData.eepromData.ksTo4Ee = (ksToReg & 0xFF00) >> 8;
+				if (caliData.eepromData.ksTo4Ee > 127)
+								caliData.eepromData.ksTo4Ee -= 256;
+
+				caliData.eepromData.ksTo4 = caliData.eepromData.ksTo4Ee
+												/ pow(2, caliData.eepromData.ksToScale);
+
+				return MLX_OK;
+}
+
+static MLX90640_StatusTypedef restoreSensitivityCorrectionCoeffients()
+{
+
+				caliData.eepromData.alphaCorrRange1 =
+												1. / (1. + caliData.eepromData.ksTo1 * (0 - (-40)));
+
+				caliData.eepromData.alphaCorrRange2 = 1;
+
+				caliData.eepromData.alphaCorrRange3 =
+												1. + caliData.eepromData.ksTo2 * (caliData.eepromData.ct3 - 0);
+
+				caliData.eepromData.alphaCorrRange4 =
+												(1 + caliData.eepromData.ksTo2 * (caliData.eepromData.ct3 - 0))
+												* (1 + caliData.eepromData.ksTo3 *
+																				(caliData.eepromData.ct4 - caliData.eepromData.ct3));
+
+				return MLX_OK;
+}
+
+static MLX90640_StatusTypedef restoreSensitivityAlphaCp()
+{
+
 
 				return MLX_OK;
 }
@@ -321,7 +700,12 @@ static MLX90640_StatusTypedef getEepromData()
 				restoreVddSensorParams();
 				restoreTaSensorParams();
 				restoreOffsets();
+				restoreSensitivityAlphaij();
+				restoreKtaCoefficient();
 				restoreGain();
+				restoreCornerTemperatures();
+				restoreKsToCoefficient();
+				restoreSensitivityCorrectionCoeffients();
 				restoreResolutionEe();
 
 				return MLX_OK;
