@@ -74,6 +74,8 @@ void StartDefaultTask(void *argument)
 //				HAL_I2C_Mem_Read(&hi2c1, mlx90640Address << 1, 0x800D, I2C_MEMADD_SIZE_16BIT, refreshRate, 2, 3000);
 //				printf ("Refresh rate from 0x800D: 0x%X\r\n", swap_uint16(*(uint16_t*)refreshRate));
 
+				// for testing
+				MLX90640_GetFrameData(1, NULL);
 				for (;;)
 				{
 								printf ("test\r\n");

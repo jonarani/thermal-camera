@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-#include "mbed.h"
+
 #include "MLX90640_I2C_Driver.h"
 
 I2C i2c(p9, p10);
