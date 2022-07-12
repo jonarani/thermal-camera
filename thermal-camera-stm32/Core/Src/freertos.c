@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "cmsis_os.h"
 #include <stdio.h>
+#include "MLX90640_API.h"
 
 /* USER CODE END Includes */
 
