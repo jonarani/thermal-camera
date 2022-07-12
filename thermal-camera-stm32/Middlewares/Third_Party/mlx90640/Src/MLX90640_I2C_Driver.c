@@ -18,6 +18,7 @@
 #include "MLX90640_I2C_Driver.h"
 
 static I2C_HandleTypeDef *hi2c = NULL;
+static uint8_t i2cData[1664] = {0};
 
 void MLX90640_I2CInit(I2C_HandleTypeDef *i2cHandle)
 {
@@ -42,7 +43,6 @@ int MLX90640_I2CRead(uint8_t slaveAddr, uint16_t startAddress, uint16_t nMemAddr
     HAL_StatusTypeDef status = HAL_OK;
     uint16_t cnt = 0;
     uint16_t i = 0;
-    uint8_t i2cData[1664] = {0};
     uint16_t *p;
     
     p = data;
@@ -72,7 +72,7 @@ int MLX90640_I2CWrite(uint8_t slaveAddr, uint16_t writeAddress, uint16_t data)
 
     data = (data << 8) | (data >> 8);
 
-	HAL_I2C_Mem_Write(hi2c, sa, writeAddress, I2C_MEMADD_SIZE_16BIT, &data, sizeof(data), 3000);
+	HAL_I2C_Mem_Write(hi2c, sa, writeAddress, I2C_MEMADD_SIZE_16BIT, (uint8_t*)&data, sizeof(data), 3000);
 
 	// TODO: can check, but too much overhead
 //    static uint16_t dataCheck;
