@@ -27,6 +27,7 @@
 #include "cmsis_os.h"
 #include <stdio.h>
 #include "MLX90640_API.h"
+#include "MLX90640_I2C_Driver.h"
 
 /* USER CODE END Includes */
 
@@ -37,7 +38,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MLX90640_ADDR (0x33)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,33 +63,37 @@ extern UART_HandleTypeDef huart2;
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-				if (hi2c == &hi2c1)
-				{
-								printf("data\r\n");
-								HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-				}
+	if (hi2c == &hi2c1)
+	{
+		printf("data\r\n");
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+	}
 }
 
 void StartDefaultTask(void *argument)
 {
-//				HAL_I2C_Mem_Read(&hi2c1, mlx90640Address << 1, 0x800D, I2C_MEMADD_SIZE_16BIT, refreshRate, 2, 3000);
-//				printf ("Refresh rate from 0x800D: 0x%X\r\n", swap_uint16(*(uint16_t*)refreshRate));
+	uint16_t controlRegister = 0;
 
-				// for testing
-				MLX90640_GetFrameData(1, NULL);
-				for (;;)
-				{
-								printf ("test\r\n");
-								osDelay(10000);
-				}
+	MLX90640_I2CInit(&hi2c1);
+
+	MLX90640_SetRefreshRate(MLX90640_ADDR, MLX_16_HZ);
+	MLX90640_I2CRead(MLX90640_ADDR, 0x800D, 1, &controlRegister);
+
+	printf ("controlRegister from 0x800D: 0x%X\r\n", controlRegister);
+
+	for (;;)
+	{
+		printf ("test\r\n");
+		osDelay(10000);
+	}
 }
 
 void StartCameraTask(void *argument)
 {
-				for (;;)
-				{
-								osDelay(10000);
-				}
+	for (;;)
+	{
+		osDelay(10000);
+	}
 }
 
 /* USER CODE END Application */

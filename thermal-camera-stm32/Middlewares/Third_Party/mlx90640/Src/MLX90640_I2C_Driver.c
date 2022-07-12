@@ -17,113 +17,71 @@
 
 #include "MLX90640_I2C_Driver.h"
 
-I2C i2c(p9, p10);
+static I2C_HandleTypeDef *hi2c = NULL;
 
-void MLX90640_I2CInit()
-{   
-    i2c.stop();
+void MLX90640_I2CInit(I2C_HandleTypeDef *i2cHandle)
+{
+	hi2c = i2cHandle;
+    return;
 }
 
-int MLX90640_I2CGeneralReset(void)
-{    
-    int ack;
-    char cmd[2] = {0,0};
-    
-    cmd[0] = 0x00;
-    cmd[1] = 0x06;    
+uint8_t MLX90640_I2CGeneralReset(void)
+{
+    uint8_t cmd[2] = {0x06, 0x00};
 
-    i2c.stop();
-    wait_us(5);    
-    ack = i2c.write(cmd[0], &cmd[1], 1, 0);
-    
-    if (ack != 0x00)
-    {
-        return -1;
-    }         
-    i2c.stop();   
-    
-    wait_us(50);    
-    
+    HAL_I2C_Slave_Transmit(hi2c, &cmd[0], sizeof(cmd), 3000);
+
+    HAL_Delay(1);
+
     return 0;
 }
 
 int MLX90640_I2CRead(uint8_t slaveAddr, uint16_t startAddress, uint16_t nMemAddressRead, uint16_t *data)
 {
-    uint8_t sa;                           
-    int ack = 0;                               
-    int cnt = 0;
-    int i = 0;
-    char cmd[2] = {0,0};
-    char i2cData[1664] = {0};
+    uint8_t sa = 0;
+    HAL_StatusTypeDef status = HAL_OK;
+    uint16_t cnt = 0;
+    uint16_t i = 0;
+    uint8_t i2cData[1664] = {0};
     uint16_t *p;
     
     p = data;
     sa = (slaveAddr << 1);
-    cmd[0] = startAddress >> 8;
-    cmd[1] = startAddress & 0x00FF;
     
-    i2c.stop();
-    wait_us(5);    
-    ack = i2c.write(sa, cmd, 2, 1);
-    
-    if (ack != 0x00)
+    status = HAL_I2C_Mem_Read(hi2c, sa, startAddress, I2C_MEMADD_SIZE_16BIT, i2cData, nMemAddressRead * 2, 3000);
+
+    if (status != HAL_OK)
     {
-        return -1;
+		return -status;
     }
-             
-    sa = sa | 0x01;
-    ack = i2c.read(sa, i2cData, 2*nMemAddressRead, 0);
-    
-    if (ack != 0x00)
-    {
-        return -1; 
-    }          
-    i2c.stop();   
-    
-    for(cnt=0; cnt < nMemAddressRead; cnt++)
+
+    for (cnt = 0; cnt < nMemAddressRead; cnt++)
     {
         i = cnt << 1;
-        *p++ = (uint16_t)i2cData[i]*256 + (uint16_t)i2cData[i+1];
+        *p++ = ((uint16_t)i2cData[i] << 8) + (uint16_t)i2cData[i+1];
     }
     
     return 0;   
 } 
 
-void MLX90640_I2CFreqSet(int freq)
-{
-    i2c.frequency(1000*freq);
-}
-
 int MLX90640_I2CWrite(uint8_t slaveAddr, uint16_t writeAddress, uint16_t data)
 {
     uint8_t sa;
-    int ack = 0;
-    char cmd[4] = {0,0,0,0};
-    static uint16_t dataCheck;
-    
 
     sa = (slaveAddr << 1);
-    cmd[0] = writeAddress >> 8;
-    cmd[1] = writeAddress & 0x00FF;
-    cmd[2] = data >> 8;
-    cmd[3] = data & 0x00FF;
 
-    i2c.stop();
-    wait_us(5);    
-    ack = i2c.write(sa, cmd, 4, 0);
-    
-    if (ack != 0x00)
-    {
-        return -1;
-    }         
-    i2c.stop();   
-    
-    MLX90640_I2CRead(slaveAddr,writeAddress,1, &dataCheck);
-    
-    if ( dataCheck != data)
-    {
-        return -2;
-    }    
+    data = (data << 8) | (data >> 8);
+
+	HAL_I2C_Mem_Write(hi2c, sa, writeAddress, I2C_MEMADD_SIZE_16BIT, &data, sizeof(data), 3000);
+
+	// TODO: can check, but too much overhead
+//    static uint16_t dataCheck;
+//    MLX90640_I2CRead(slaveAddr, writeAddress, 1, &dataCheck);
+//
+//    if ( dataCheck != data)
+//    {
+//        return -2;
+//    }
     
     return 0;
 }
