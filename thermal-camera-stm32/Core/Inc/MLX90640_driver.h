@@ -56,6 +56,13 @@ typedef struct EepromData
 
 				uint16_t pixelOffsets[768];
 
+				int16_t ilChessC1Ee;
+				int16_t ilChessC1;
+				int16_t ilChessC2Ee;
+				int16_t ilChessC2;
+				int16_t ilChessC3Ee;
+				int16_t ilChessC3;
+
 				uint16_t alphaRef;
 				uint16_t scaleACCReg;
 				uint8_t alphaScale;
@@ -100,30 +107,60 @@ typedef struct EepromData
 				double alphaCorrRange3;
 				double alphaCorrRange4;
 
+				uint16_t alphaScaleCp;
+				int16_t cp_P1P0_ratio;
+				double alphaCpSubpage0;
+				double alphaCpSubpage1;
+
+				int16_t offCpSubpage0;
+				int16_t offCpSubpage1;
+				int16_t offCpSubpage1Delta;
+
+				uint8_t kvScale;
+				int16_t kvCpEe;
+				double kvCp;
+
+				int16_t kTaCpEe;
+				double kTaCp;
+
+				uint16_t kvAvg;
+
+				double tgc;
+				uint16_t tgcEe;
+
 				uint16_t resolutionEe;
 } EepromData;
 
-typedef struct TaSensorParams {
-				double deltaV;
-				double Vdd;
-				int16_t Vptat;
-				int16_t Vbe;
-				double Vptatart;
-				double Ta; // Actual sensor surrounding temperature is 8deg lower
-} TaSensorParams;
-
-typedef struct ResolutionParams {
+typedef struct CalculatedData
+{
 				uint16_t resolutionReg;
 				double resolutionCorr;
-} ResolutionParams;
 
-typedef struct CalibrationData
+				double Vdd;
+				double deltaV;
+				int16_t vPtat;
+				int16_t vBe;
+				double vPtatArt;
+				double ta; // Actual sensor surrounding temperature is 8deg lower
+
+				double kGain;
+
+				double pixGainCpSp0;
+				double pixGainCpSp1;
+
+				double pixOsCpSp0;
+				double pixOsCpSp1;
+
+} CalculatedData;
+
+typedef struct MLX_Data
 {
 				EepromData eepromData;
-				TaSensorParams taSensorParams;
-				ResolutionParams resolutionsparams;
-				double kGain;
-} MLX_CalibrationData;
+				CalculatedData calcuData;
+
+				uint16_t pixelRawData[768];
+				double tempData[768];
+} MLX_Data;
 
 
 #define MLX90640_REFRESH_RATE_ADDR 										0x240C
@@ -139,17 +176,27 @@ typedef struct CalibrationData
 #define MLX90640_PTAT_25_ADDR																0x2431
 #define MLX90640_KVPTAT_KTPTAT_ADDR 									0x2432
 #define MLX90640_KVDD_VDD25_ADDR 												0x2433
+#define MLX90640_KV_AVG_ADDR 																0x2434
+#define MLX90640_IL_CHESS_ADDR 														0x2435
 #define MLX90640_KTA_AVG_ADDR 															0x2436
 #define MLX90640_RES_CTRL_AND_SCALE_ADDR 				0x2438
+#define MLX90640_CP_P1_P0_RATIO_ADDR 								0x2439
+#define MLX90640_OFF_CP_ADDR 																0x243A
+#define MLX90640_KV_KTA_CP_ADDR 													0x243B
+#define MLX90640_TGC_EE_ADDR 																0x243C
 #define MLX90640_KS_TO_1_2_ADDR 													0x243D
 #define MLX90640_KS_TO_3_4_ADDR 													0x243E
 #define MLX90640_CORNER_TEMP_ADDR 											0x243F
 
 #define MLX90640_PIXEL_CALI_DATA_START_ADDR		0x2440
 
+// Pixel raw data begin addr 0x0400
+#define MLX90640_RAM_0400																				0x0400
 #define MLX90640_RAM_0700																				0x0700
+#define MLX90640_RAM_0708																				0x0708
 #define MLX90640_RAM_070A																				0x070A
 #define MLX90640_RAM_0720																				0x0720
+#define MLX90640_RAM_0728																				0x0728
 #define MLX90640_RAM_072A																				0x072A
 
 #define MLX90640_CONTROL_REGISTER_1 									0x800D
@@ -158,13 +205,29 @@ typedef struct CalibrationData
 #define NUM_COLS_IN_FRAME 32
 #define NUM_OF_PIXELS (NUM_ROWS_IN_FRAME * NUM_COLS_IN_FRAME)
 
+#define PAT1(pixNum) ((int)((pixNum - 1) / 32))
+#define PAT2(pixNum) ((int)((pixNum - 1) / 2))
+
+
+// pixels from 1..768
+#define PATTERN(pixNum)	(((PAT1(pixNum) - (int)(PAT1(pixNum) / 2) * 2)) ^ \
+																								((pixNum - 1) - ((int)(PAT2(pixNum)) * 2)))
+
 extern uint8_t mlx90640Address;
 
 MLX90640_StatusTypedef extractCalibrationData();
 
 MLX90640_StatusTypedef resolutionCalculations();
-MLX90640_StatusTypedef taCalculations();
+MLX90640_StatusTypedef supplyVoltageCalculations();
+MLX90640_StatusTypedef ambientTempCalculations();
 MLX90640_StatusTypedef gainParameterCalculation();
+MLX90640_StatusTypedef getPixelDataFromRam();
+MLX90640_StatusTypedef calculateGainCompensation();
+int16_t getPixOsref(uint8_t pixelRow, uint8_t pixelCol);
+MLX90640_StatusTypedef calculateIrDataCompensation();
+MLX90640_StatusTypedef compensateGainOfCpPixel();
+MLX90640_StatusTypedef compensateOffsetTaAndVddOfCpPixel();
+MLX90640_StatusTypedef iRDataGradientCompensation();
 
 // Default refresh rate is 2Hz.
 // All available options: 0.5, 1, 2, 4, 8, 16, 32 and 64Hz
@@ -176,6 +239,7 @@ int16_t getAlphaPixel(uint8_t pixelRow, uint8_t pixelCol);
 int8_t getKTaEe(uint8_t pixelRow, uint8_t pixelCol);
 uint16_t getKTaRcEe(uint8_t pixelRow, uint8_t pixelCol);
 double getAlphaij(uint8_t pixelRow, uint8_t pixelCol);
-
+double getKvij(uint8_t pixelRow, uint8_t pixelCol);
+double getKTaij(uint8_t pixelRow, uint8_t pixelCol);
 
 #endif /* INC_MLX90640_DRIVER_H_ */
