@@ -48,14 +48,7 @@ UART_HandleTypeDef huart2;
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for cameraTask */
-osThreadId_t cameraTaskHandle;
-const osThreadAttr_t cameraTask_attributes = {
-  .name = "cameraTask",
-  .stack_size = 512 * 4,
+  .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
@@ -95,7 +88,6 @@ static void MX_USART2_UART_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 void StartDefaultTask(void *argument);
-void StartCameraTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -163,9 +155,6 @@ int main(void)
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
-
-  /* creation of cameraTask */
-  cameraTaskHandle = osThreadNew(StartCameraTask, NULL, &cameraTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
 
@@ -380,24 +369,6 @@ __weak void StartDefaultTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END 5 */
-}
-
-/* USER CODE BEGIN Header_StartCameraTask */
-/**
-* @brief Function implementing the cameraTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartCameraTask */
-__weak void StartCameraTask(void *argument)
-{
-  /* USER CODE BEGIN StartCameraTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END StartCameraTask */
 }
 
 /**

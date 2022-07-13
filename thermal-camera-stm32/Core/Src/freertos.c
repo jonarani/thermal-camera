@@ -72,27 +72,72 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void StartDefaultTask(void *argument)
 {
-	uint16_t controlRegister = 0;
+	paramsMLX90640 mlxParams;
+	uint16_t mlx90640Data[834] = {0};
+	float image[768] = {0};
+
+	float tr = 0;
+	float emissivity = 0.95;
+
+	uint16_t i = 0;
+	int16_t status = -1;
 
 	MLX90640_I2CInit(&hi2c1);
 
 	MLX90640_SetRefreshRate(MLX90640_ADDR, MLX_16_HZ);
-	MLX90640_I2CRead(MLX90640_ADDR, 0x800D, 1, &controlRegister);
 
-	printf ("controlRegister from 0x800D: 0x%X\r\n", controlRegister);
+	MLX90640_DumpEE(MLX90640_ADDR, mlx90640Data);
+	MLX90640_ExtractParameters(mlx90640Data, &mlxParams);
 
-	for (;;)
+
+	osDelay(500);
+
+
+	printf("Broken pixels: \r\n");
+	for (i = 0; i < 5; i++)
 	{
-		printf ("test\r\n");
-		osDelay(10000);
+		printf("0x%X ", mlxParams.brokenPixels[i]);
 	}
-}
 
-void StartCameraTask(void *argument)
-{
+	printf("\r\n");
+	printf("Outlier pixels: \r\n");
+	for (i = 0; i < 5; i++)
+	{
+		printf("0x%X ", mlxParams.outlierPixels[i]);
+	}
+
+	printf("\r\n");
+
 	for (;;)
 	{
-		osDelay(10000);
+		status = MLX90640_SynchFrame(MLX90640_ADDR);
+		if (status != 0)
+		{
+			printf("SynchFrame failed\r\n");
+			osDelay(1000);
+			continue;
+		}
+
+		MLX90640_GetFrameData(MLX90640_ADDR, mlx90640Data);
+
+		tr = MLX90640_GetTa(mlx90640Data, &mlxParams) - 8;
+
+		printf("Ambient temp: %.2f\r\n", tr);
+
+		MLX90640_CalculateTo(mlx90640Data, &mlxParams, emissivity, tr, image);
+
+		MLX90640_BadPixelsCorrection(mlxParams.brokenPixels, image, 1, &mlxParams);
+		MLX90640_BadPixelsCorrection(mlxParams.outlierPixels, image, 1, &mlxParams);
+
+		for (i = 0; i < 768; i++)
+		{
+			printf("%4.1f ", image[i]);
+
+			if ((i+1) % 32 == 0)
+				printf("\r\n");
+		}
+		printf("\r\n\r\n");
+		osDelay(3000);
 	}
 }
 
