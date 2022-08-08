@@ -52,6 +52,13 @@ const osThreadAttr_t thermalCamTask_attributes = {
   .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for wifiTask */
+osThreadId_t wifiTaskHandle;
+const osThreadAttr_t wifiTask_attributes = {
+  .name = "wifiTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
 
 #ifdef __GNUC__
@@ -90,6 +97,7 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 void StartCamTask(void *argument);
+void StartWifiTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
@@ -156,6 +164,9 @@ int main(void)
   /* Create the thread(s) */
   /* creation of thermalCamTask */
   thermalCamTaskHandle = osThreadNew(StartCamTask, NULL, &thermalCamTask_attributes);
+
+  /* creation of wifiTask */
+  wifiTaskHandle = osThreadNew(StartWifiTask, NULL, &wifiTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
 
@@ -284,7 +295,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 921600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -403,6 +414,24 @@ __weak void StartCamTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartWifiTask */
+/**
+* @brief Function implementing the wifiTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartWifiTask */
+__weak void StartWifiTask(void *argument)
+{
+  /* USER CODE BEGIN StartWifiTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartWifiTask */
 }
 
 /**

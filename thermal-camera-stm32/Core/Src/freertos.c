@@ -54,8 +54,7 @@ extern DMA_HandleTypeDef hdma_i2c1_rx;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart1;
 
-static uint8_t espBuf[50] = {0};
-static bool received = false;
+static uint8_t espBuf[200] = {0};
 
 /* USER CODE END Variables */
 
@@ -78,15 +77,17 @@ void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	__HAL_UART_CLEAR_OREFLAG(&huart1);
-	printf("Callback\r\n");
-	uint16_t i = 0;
-	for (i = 0; i < Size; i++)
+	if (huart == &huart1)
 	{
-		printf ("%d ", espBuf[i]);
+		__HAL_UART_CLEAR_OREFLAG(&huart1);
+		printf("--");
+		uint16_t i = 0;
+		for (i = 0; i < Size; i++)
+		{
+			printf ("%c", espBuf[i]);
+		}
+		printf ("--\r\n");
 	}
-	printf ("\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
 }
 
 void StartCamTask(void *argument)
@@ -94,20 +95,20 @@ void StartCamTask(void *argument)
 	paramsMLX90640 mlxParams;
 	uint16_t mlx90640Data[834] = {0};
 
-	float image[768] = {0};
-	//uint8_t crAndLf[2] = {'\r', '\n'};
-	//memcpy((uint8_t*)&image[768], crAndLf, sizeof(crAndLf));
+	float image[770] = {0};
+	uint8_t crAndLf[2] = {'\r', '\n'};
+	memcpy((uint8_t*)&image[768], crAndLf, sizeof(crAndLf));
+
 
 	float tr = 0;
 	float emissivity = 0.95;
 
-	uint16_t i = 0;
 	int16_t status = -1;
 
 	MLX90640_I2CInit(&hi2c1);
-
+//
 	MLX90640_SetRefreshRate(MLX90640_ADDR, MLX_16_HZ);
-
+//
 	MLX90640_DumpEE(MLX90640_ADDR, mlx90640Data);
 	MLX90640_ExtractParameters(mlx90640Data, &mlxParams);
 
@@ -127,95 +128,103 @@ void StartCamTask(void *argument)
 //	}
 //
 //	printf("\r\n");
-
 	uint32_t sampledFrames = 0;
 	for (;;)
 	{
-		uint32_t start = osKernelGetTickCount();
+		printf ("Test2\r\n");
+//		uint32_t start = osKernelGetTickCount();
 		status = MLX90640_SynchFrame(MLX90640_ADDR);
 		if (status != 0)
 		{
 			printf("SynchFrame failed\r\n");
-			osDelay(20);
+			osDelay(1000);
 			continue;
 		}
 
 		MLX90640_GetFrameData(MLX90640_ADDR, mlx90640Data);
-
+//
 		tr = MLX90640_GetTa(mlx90640Data, &mlxParams) - 8;
-
+//
 		MLX90640_CalculateTo(mlx90640Data, &mlxParams, emissivity, tr, image);
 
+		// Not needed at the moment
 //		MLX90640_BadPixelsCorrection(mlxParams.brokenPixels, image, 1, &mlxParams);
 //		MLX90640_BadPixelsCorrection(mlxParams.outlierPixels, image, 1, &mlxParams);
 
 		if ((sampledFrames + 1) % 2 == 0)
 		{
-			HAL_UART_Transmit(&huart1, (uint8_t*)&image, sizeof(image), osWaitForever);
-			//printf("Sent\r\n");
+			//HAL_UART_Transmit(&huart1, (uint8_t*)&image, sizeof(image), osWaitForever);
+			//printf ("%.2f %.2f %.2f %.2f\r\n", tr, image[100], image[200], image[300]);
 		}
 		sampledFrames++;
 
-		uint32_t end = osKernelGetTickCount();
-		printf ("%lu\r\n", end - start);
-
+		osDelay(5000);
+//
+//		uint32_t end = osKernelGetTickCount();
+//		printf ("%lu\r\n", end - start);
 	}
 }
 
-//void StartWifiTask(void *argument)
-//{
-//	uint8_t test[5] = {'A', 'T', '\r', '\n'};
-//	float num = 7.7;
-//	float otherNum = 123.45;
-//	char cmd[] = "AT\r\n";
-//
+void StartWifiTask(void *argument)
+{
+	// Test command
+	const char AT_test[] = "AT\r\n";
+
+	// Switch echo off
+	const char AT_echo[] = "ATE0\r\n";
+
+	// Query Wifi state and info
+	const char AT_query[] = "AT+CWMODE?\r\n";
+
+	const char AT_setStationMode[] = "AT+CWMODE=1\r\n";
+
+	//const char AT_queryAps[] = "AT+CWLAP=\"Telia-AA24DF\"\r\n";
+
+	const char AT_dc[] = "AT+CWQAP\r\n";
+
+	const char AT_connectStationToAp[] = "AT+CWJAP=\"<WIFI NAME>\",\"<PASSWORD>\"\r\n";
+
+	osDelay(2000);
+
+	printf ("Setting echo off...\r\n");
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_echo, strlen(AT_echo), 5000);
+
+	osDelay(500);
+
+	printf ("Querying wifi mode...\r\n");
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_query, strlen(AT_query), 5000);
+
+	osDelay(500);
+
+	printf ("Setting wifi mode...\r\n");
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_setStationMode, strlen(AT_setStationMode), 5000);
+
 //	osDelay(1000);
-//	uint16_t rxLen;
-//	uint16_t i = 0;
-//
-//	printf("sizeof f: %d\r\n", sizeof(num));
-//
-//	float floatTest[3];
-//	floatTest[0] = num;
-//	floatTest[1] = otherNum;
-//
-//	uint8_t crAndLf[2] = {'\r', '\n'};
-//	memcpy((uint8_t*)&floatTest[2], crAndLf, sizeof(crAndLf));
-//
-//	printf("size of floatTest: %d\r\n", sizeof(floatTest));
-//	printf("floatTest[0]: %.2f\r\n", floatTest[0]);
-//	printf("floatTest[0]: %.2f\r\n", floatTest[1]);
-//
-//	uint8_t *p = &floatTest[2];
-//	for (i = 0; i < 4; i++)
-//	{
-//		printf ("%d ", *p++);
-//	}
-//	printf("\r\n");
-//
-//	osDelay(50);
-//
-//	//__HAL_UART_CLEAR_OREFLAG(&huart1);
-//	//HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-//
-////
-////	printf("Made it!\r\n");
-//
-//	for (;;)
-//	{
-//		//HAL_UART_Transmit(&huart1, (uint8_t*)&floatTest, sizeof(floatTest) - 2, 5000);
-//		//HAL_UARTEx_ReceiveToIdle(&huart1, espBuf, 10, &rxLen, osWaitForever);
-////		for (i = 0; i < rxLen; i++)
-////		{
-////			printf ("%d ", espBuf[i]);
-////		}
-////		printf("\r\n");
-//		//printf("Transmitted!\r\n");
-//		printf("test\r\n");
-//		osThreadYield();
-//		osDelay(1000);
-//	}
-//}
+//	printf ("Querying APs...\r\n");
+//	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 200);
+//	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_queryAps, strlen(AT_queryAps), 5000);
+
+	osDelay(500);
+
+	printf ("DCing from AP...\r\n");
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_dc, strlen(AT_dc), 5000);
+
+	osDelay(500);
+
+	printf ("Connecting to AP...\r\n");
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_connectStationToAp, strlen(AT_connectStationToAp), 5000);
+
+	for (;;)
+	{
+		printf("test\r\n");
+		osDelay(1000);
+	}
+}
 
 /* USER CODE END Application */
 
