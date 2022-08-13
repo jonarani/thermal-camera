@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <memory.h>
+#include <string.h>
 #include "MLX90640_API.h"
 #include "MLX90640_I2C_Driver.h"
 
@@ -54,7 +55,24 @@ extern DMA_HandleTypeDef hdma_i2c1_rx;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart1;
 
-static uint8_t espBuf[200] = {0};
+extern osThreadId_t EspTxTaskHandle;
+
+static uint8_t receiveBuf[150] = {0};
+static char expectedStr[50] = {0};
+
+
+typedef enum
+{
+	ESP_INIT = 0,
+	RECEIVED_EXPECTED,
+	RECEIVED_UNEXPECTED,
+	BUSY_PROCESSING,
+	ESP_ERROR,
+	ESP_UNKNOWN,
+
+} EspRxStatus;
+
+static EspRxStatus espRxStatus = ESP_INIT;
 
 /* USER CODE END Variables */
 
@@ -80,13 +98,34 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	if (huart == &huart1)
 	{
 		__HAL_UART_CLEAR_OREFLAG(&huart1);
-		printf("--");
-		uint16_t i = 0;
-		for (i = 0; i < Size; i++)
+		receiveBuf[Size] = 0;
+
+		if (strstr((char *)receiveBuf, expectedStr))
 		{
-			printf ("%c", espBuf[i]);
+			espRxStatus = RECEIVED_EXPECTED;
+		}
+		else if (strstr((char *)receiveBuf, "ERROR"))
+		{
+			espRxStatus = ESP_ERROR;
+		}
+		else if (strstr((char *)receiveBuf, "busy p.."))
+		{
+			espRxStatus = BUSY_PROCESSING;
+		}
+		else
+		{
+			espRxStatus = RECEIVED_UNEXPECTED;
+			HAL_UARTEx_ReceiveToIdle_IT(&huart1, &receiveBuf[0], 50);
+		}
+
+		printf("-- %d ", Size);
+		uint16_t i = 0;
+		for (i = 0; receiveBuf[i] != 0; i++)
+		{
+			printf ("%c", receiveBuf[i]);
 		}
 		printf ("--\r\n");
+
 	}
 }
 
@@ -165,64 +204,71 @@ void StartCamTask(void *argument)
 	}
 }
 
-void StartWifiTask(void *argument)
+
+static void sendAtAndWaitForResponse(const char *command, const char *exptectedMsg)
+{
+	__HAL_UART_CLEAR_OREFLAG(&huart1);
+
+	espRxStatus = ESP_INIT;
+	printf ("Command: %s\r\n", command);
+	strcpy(expectedStr, exptectedMsg);
+	printf ("expectedStr: %s\r\n", expectedStr);
+
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, receiveBuf, 50);
+	HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 5000);
+
+	while (espRxStatus != RECEIVED_EXPECTED)
+	{
+		if (espRxStatus == BUSY_PROCESSING)
+		{
+			osDelay(1000);
+			espRxStatus = ESP_UNKNOWN;
+			HAL_UARTEx_ReceiveToIdle_IT(&huart1, receiveBuf, 50);
+			HAL_UART_Transmit(&huart1, (uint8_t*)command, strlen(command), 5000);
+		}
+		else if (espRxStatus == ESP_ERROR || espRxStatus == RECEIVED_UNEXPECTED)
+		{
+			printf ("Error looping: %u\r\n", espRxStatus);
+			osDelay(2000);
+		}
+	}
+}
+
+void StartEspTxTask(void *argument)
 {
 	// Test command
 	const char AT_test[] = "AT\r\n";
-
 	// Switch echo off
 	const char AT_echo[] = "ATE0\r\n";
-
 	// Query Wifi state and info
 	const char AT_query[] = "AT+CWMODE?\r\n";
-
 	const char AT_setStationMode[] = "AT+CWMODE=1\r\n";
-
-	//const char AT_queryAps[] = "AT+CWLAP=\"Telia-AA24DF\"\r\n";
-
 	const char AT_dc[] = "AT+CWQAP\r\n";
-
-	const char AT_connectStationToAp[] = "AT+CWJAP=\"<WIFI NAME>\",\"<PASSWORD>\"\r\n";
+	const char AT_connectStationToAp[] = "AT+CWJAP=\"WIFI NAME\",\"WIFI PASSWORD\"\r\n";
+	// Establish TCP connection
+	const char AT_establishTCP[] = "AT+CIPSTART=\"TCP\",\"192.168.1.174\",65432\r\n";
+	const char AT_sendTestData[] = "AT+CIPSEND=5\r\n";
+	const char testData[] = "data\n";
 
 	osDelay(2000);
 
 	printf ("Setting echo off...\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_echo, strlen(AT_echo), 5000);
-
-	osDelay(500);
-
-	printf ("Querying wifi mode...\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_query, strlen(AT_query), 5000);
-
-	osDelay(500);
-
-	printf ("Setting wifi mode...\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_setStationMode, strlen(AT_setStationMode), 5000);
-
-//	osDelay(1000);
-//	printf ("Querying APs...\r\n");
-//	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 200);
-//	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_queryAps, strlen(AT_queryAps), 5000);
-
-	osDelay(500);
-
-	printf ("DCing from AP...\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_dc, strlen(AT_dc), 5000);
-
-	osDelay(500);
+	sendAtAndWaitForResponse(AT_echo, "OK");
 
 	printf ("Connecting to AP...\r\n");
-	HAL_UARTEx_ReceiveToIdle_IT(&huart1, espBuf, 50);
-	HAL_UART_Transmit(&huart1, (uint8_t*)&AT_connectStationToAp, strlen(AT_connectStationToAp), 5000);
+	sendAtAndWaitForResponse(AT_connectStationToAp, "OK");
+
+	printf ("Connecting to the server...\r\n");
+	sendAtAndWaitForResponse(AT_establishTCP, "OK");
 
 	for (;;)
 	{
-		printf("test\r\n");
-		osDelay(1000);
+
+		sendAtAndWaitForResponse(AT_sendTestData, "OK");
+		sendAtAndWaitForResponse(testData, "SEND OK");
+
+		printf("Esp tx\r\n");
+		osDelay(3000);
 	}
 }
 

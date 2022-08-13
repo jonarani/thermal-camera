@@ -45,17 +45,17 @@ DMA_HandleTypeDef hdma_i2c1_rx;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
-/* Definitions for thermalCamTask */
-osThreadId_t thermalCamTaskHandle;
-const osThreadAttr_t thermalCamTask_attributes = {
-  .name = "thermalCamTask",
+/* Definitions for ThermalCamTask */
+osThreadId_t ThermalCamTaskHandle;
+const osThreadAttr_t ThermalCamTask_attributes = {
+  .name = "ThermalCamTask",
   .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for wifiTask */
-osThreadId_t wifiTaskHandle;
-const osThreadAttr_t wifiTask_attributes = {
-  .name = "wifiTask",
+/* Definitions for EspTxTask */
+osThreadId_t EspTxTaskHandle;
+const osThreadAttr_t EspTxTask_attributes = {
+  .name = "EspTxTask",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
@@ -97,7 +97,7 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 void StartCamTask(void *argument);
-void StartWifiTask(void *argument);
+void StartEspTxTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
@@ -162,11 +162,11 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of thermalCamTask */
-  thermalCamTaskHandle = osThreadNew(StartCamTask, NULL, &thermalCamTask_attributes);
+  /* creation of ThermalCamTask */
+  ThermalCamTaskHandle = osThreadNew(StartCamTask, NULL, &ThermalCamTask_attributes);
 
-  /* creation of wifiTask */
-  wifiTaskHandle = osThreadNew(StartWifiTask, NULL, &wifiTask_attributes);
+  /* creation of EspTxTask */
+  EspTxTaskHandle = osThreadNew(StartEspTxTask, NULL, &EspTxTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
 
@@ -416,22 +416,22 @@ __weak void StartCamTask(void *argument)
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_StartWifiTask */
+/* USER CODE BEGIN Header_StartEspTxTask */
 /**
-* @brief Function implementing the wifiTask thread.
+* @brief Function implementing the EspTxTask thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartWifiTask */
-__weak void StartWifiTask(void *argument)
+/* USER CODE END Header_StartEspTxTask */
+__weak void StartEspTxTask(void *argument)
 {
-  /* USER CODE BEGIN StartWifiTask */
+  /* USER CODE BEGIN StartEspTxTask */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END StartWifiTask */
+  /* USER CODE END StartEspTxTask */
 }
 
 /**
